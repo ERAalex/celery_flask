@@ -14,7 +14,6 @@ from werkzeug.utils import secure_filename
 from wtforms import SubmitField
 from tasks import transform_image, check_result
 
-import datetime
 import redis
 
 redis_server = redis.Redis(host='127.0.0.1', port=6379, decode_responses=True)
@@ -45,10 +44,6 @@ class UploadForm(FlaskForm):
     )
     submit = SubmitField('Upload')
 
-
-@app_flask.route('/uploads/<filename>')
-def get_file(filename):
-    return send_from_directory(app_flask.config['UPLOADED_PHOTOS_DEST'], filename)
 
 
 @app_flask.route("/", methods=['GET', 'POST'])
@@ -105,7 +100,17 @@ def upload_image():
     return render_template('index.html',  form=form, file_url=file_url)
 
 
-
+@app_flask.route("/processed/<string:file>/", methods=['GET', 'POST'])
+def return_file(file):
+    result = os.walk('image_done/')
+    all_files = []
+    for root, dirs, files in result:
+        all_files.append(files[0])
+    if file in all_files:
+        path = f"image_done/{file}"
+        return send_file(path, as_attachment=True)
+    else:
+        return {'Файл не найден, возможно Вы не правильно ввели его название': f'{file}'}
 
 
 
