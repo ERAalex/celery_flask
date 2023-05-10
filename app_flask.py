@@ -15,23 +15,26 @@ from wtforms import SubmitField
 from tasks import transform_image, check_result
 
 import datetime
+import redis
 
-
+redis_server = redis.Redis(host='127.0.0.1', port=6379, decode_responses=True)
 
 
 # https://www.youtube.com/watch?v=dP-2NVUgh50
 
 app_flask = Flask(__name__)
-
 app_flask.config['SECRET_KEY'] = 'sdsdsdsdds'
 app_flask.config['UPLOADED_PHOTOS_DEST'] = 'uploads'
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'])
 
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
 photos = UploadSet('photos', IMAGES)
 configure_uploads(app_flask, photos)
+
 
 class UploadForm(FlaskForm):
     photo = FileField(
@@ -43,14 +46,9 @@ class UploadForm(FlaskForm):
     submit = SubmitField('Upload')
 
 
-
-diccionary_names ={}
-
-
 @app_flask.route('/uploads/<filename>')
 def get_file(filename):
     return send_from_directory(app_flask.config['UPLOADED_PHOTOS_DEST'], filename)
-
 
 
 @app_flask.route("/", methods=['GET', 'POST'])
@@ -64,14 +62,10 @@ def upload_image():
         file_url = url_for('get_file', filename=filename)
 
         #запускаем обработку Celery-Redis
-        start = datetime.datetime.now()
         async_result = transform_image.delay(filename, filename)
-        start_2 = datetime.datetime.now()
 
-
-    # Загрузка картинки через API
+    # API POST - загрузка картинки на сервер и ее обработка
     if request.method == 'POST':
-
         if 'file' not in request.files:
             return {'error': 'файл не загружен'}
         file = request.files['file']
@@ -85,12 +79,12 @@ def upload_image():
             # запускаем обработку Celery-Redis
             async_result = transform_image.delay(filename, f'image_done/{filename}')
 
-            # сохраняем в словарь под ключом задачи селери - название файла, чтобы дальше скачать именно его
-            diccionary_names[async_result.id] = filename
+            # сохраняем в Redis ключ-значение, чтобы потом достать картинку для загрузки
+            redis_server.set(f'{async_result.id}', filename)
 
             return {'Файл загружен его id_задачи для проверки': f'{async_result.id}'}
 
-    # Загрузка картинки через API
+    # API - запрос на проверку наличия картинки
     if request.method == 'GET':
         if 'task_id' not in request.form:
             return {'Вы не задали параметр': 'task_id'}
@@ -99,8 +93,8 @@ def upload_image():
         result = check_result(task_id).json
         if result['status'] == 'SUCCESS':
 
-            # идем в словарь и ищем картинку по ключу-id
-            path = f"image_done/{diccionary_names[task_id]}"
+            # идем в Redis и ищем картинку по ключу-id
+            path = f"image_done/{redis_server.get(f'{task_id}')}"
             return send_file(path, as_attachment=True)
 
         return result

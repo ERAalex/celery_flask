@@ -9,6 +9,8 @@ app = celery.Celery(
     broker='redis://127.0.0.1:6379/1',
 )
 
+
+
 # проблема с Windows команда не работает - celery -A tasks.app worker
 # решение  pip install eventlet
 # запуск worker ов  - celery -A tasks.app worker -l info -P eventlet
