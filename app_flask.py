@@ -90,7 +90,9 @@ def upload_image():
 
             # идем в Redis и ищем картинку по ключу-id
             path = f"image_done/{redis_server.get(f'{task_id}')}"
-            return send_file(path, as_attachment=True)
+            result_path = f"{request.url_root}image_done/{redis_server.get(f'{task_id}')}"
+
+            return {'Ссылка на готовый файл': f'{result_path}'}
 
         return result
 
